@@ -1,0 +1,746 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                      String   @id @default(uuid())
+  name                    String
+  email                   String   @unique
+  passwordHash            String   @map("password_hash")
+  avatarUrl               String?  @map("avatar_url")
+  keyboardShortcuts       Json?    @map("keyboard_shortcuts")
+  notificationPreferences Json?    @map("notification_preferences")
+  timezone                String?
+  createdAt               DateTime @default(now()) @map("created_at")
+  lastLogin               DateTime? @map("last_login")
+  emailVerified           Boolean  @default(false) @map("email_verified")
+
+  // Relations
+  memberships       Membership[]
+  assignedIssues    Issue[]           @relation("AssignedUser")
+  createdIssues     Issue[]           @relation("CreatedByUser")
+  comments          Comment[]
+  activities        Activity[]
+  notifications     Notification[]
+  notificationChannels NotificationChannel[]
+  deviceSessions    DeviceSession[]
+  customViews       CustomView[]
+  offlineSync       OfflineSync[]
+  auditLogs         AuditLog[]
+  dataExports       DataExport[]
+  roadmaps          Roadmap[]
+  automations       Automation[]
+  invitedMemberships Membership[]     @relation("InvitedBy")
+  attachments       Attachment[]
+
+  @@map("users")
+}
+
+model Workspace {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  billingTier String   @map("billing_tier")
+
+  // Relations
+  memberships     Membership[]
+  projects        Project[]
+  cycles          Cycle[]
+  labels          Label[]
+  automations     Automation[]
+  integrations    Integration[]
+  customViews     CustomView[]
+  subscriptions   Subscription[]
+  gitRepositories GitRepository[]
+  roadmaps        Roadmap[]
+  metrics         Metric[]
+  dataExports     DataExport[]
+  dataImports     DataImport[]
+  auditLogs       AuditLog[]
+  ssoConfigs      SsoConfig[]
+  activities      Activity[]
+  notifications   Notification[]
+  searchIndices   SearchIndex[]
+  teamPerformances TeamPerformance[]
+
+  @@map("workspaces")
+}
+
+model Membership {
+  id                 String            @id @default(uuid())
+  userId             String            @map("user_id")
+  workspaceId        String            @map("workspace_id")
+  role               MembershipRole
+  status             MembershipStatus
+  invitedBy          String?           @map("invited_by")
+  invitedAt          DateTime?         @map("invited_at")
+  joinedAt           DateTime?         @map("joined_at")
+  permissionsOverride Json?            @map("permissions_override")
+
+  // Relations
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace  Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  invitedByUser User?  @relation("InvitedBy", fields: [invitedBy], references: [id])
+
+  @@unique([userId, workspaceId])
+  @@map("memberships")
+}
+
+model Project {
+  id           String    @id @default(uuid())
+  workspaceId  String    @map("workspace_id")
+  name         String
+  description  String?
+  startDate    DateTime? @map("start_date")
+  targetDate   DateTime? @map("target_date")
+  progress     Float?
+  customFields Json?     @map("custom_fields")
+
+  // Relations
+  workspace     Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  issues        Issue[]
+  milestones    Milestone[]
+  roadmapItems  RoadmapItem[]
+
+  @@map("projects")
+}
+
+model Issue {
+  id             String       @id @default(uuid())
+  projectId      String       @map("project_id")
+  assigneeId     String?      @map("assignee_id")
+  cycleId        String?      @map("cycle_id")
+  parentIssueId  String?      @map("parent_issue_id")
+  title          String
+  description    String?
+  priority       IssuePriority
+  status         IssueStatus
+  estimate       Int?
+  storyPoints    Int?         @map("story_points")
+  dueDate        DateTime?    @map("due_date")
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+  createdBy      String       @map("created_by")
+  metadata       Json?
+
+  // Relations
+  project       Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  assignee      User?         @relation("AssignedUser", fields: [assigneeId], references: [id])
+  cycle         Cycle?        @relation(fields: [cycleId], references: [id])
+  parentIssue   Issue?        @relation("IssueHierarchy", fields: [parentIssueId], references: [id])
+  childIssues   Issue[]       @relation("IssueHierarchy")
+  creator       User          @relation("CreatedByUser", fields: [createdBy], references: [id])
+  comments      Comment[]
+  attachments   Attachment[]
+  issueLabels   IssueLabel[]
+  blockingDependencies Dependency[] @relation("BlockingIssue")
+  blockedByDependencies Dependency[] @relation("BlockedIssue")
+  gitCommits    IssueCommit[]
+  pullRequests  PullRequest[]
+
+  @@map("issues")
+}
+
+model Comment {
+  id        String   @id @default(uuid())
+  issueId   String   @map("issue_id")
+  userId    String   @map("user_id")
+  content   String
+  createdAt DateTime @default(now()) @map("created_at")
+  reactions Json?
+
+  // Relations
+  issue Issue @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("comments")
+}
+
+model Attachment {
+  id         String   @id @default(uuid())
+  issueId    String   @map("issue_id")
+  fileName   String   @map("file_name")
+  fileUrl    String   @map("file_url")
+  fileSize   Int      @map("file_size")
+  uploadedAt DateTime @default(now()) @map("uploaded_at")
+  uploadedBy String   @map("uploaded_by")
+
+  // Relations
+  issue    Issue @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  uploader User  @relation(fields: [uploadedBy], references: [id])
+
+  @@map("attachments")
+}
+
+model Label {
+  id          String @id @default(uuid())
+  workspaceId String @map("workspace_id")
+  name        String
+  color       String
+
+  // Relations
+  workspace   Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  issueLabels IssueLabel[]
+
+  @@map("labels")
+}
+
+model IssueLabel {
+  issueId String @map("issue_id")
+  labelId String @map("label_id")
+
+  // Relations
+  issue Issue @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  label Label @relation(fields: [labelId], references: [id], onDelete: Cascade)
+
+  @@id([issueId, labelId])
+  @@map("issue_labels")
+}
+
+model Dependency {
+  blockingIssueId String         @map("blocking_issue_id")
+  blockedIssueId  String         @map("blocked_issue_id")
+  dependencyType  DependencyType @map("dependency_type")
+
+  // Relations
+  blockingIssue Issue @relation("BlockingIssue", fields: [blockingIssueId], references: [id], onDelete: Cascade)
+  blockedIssue  Issue @relation("BlockedIssue", fields: [blockedIssueId], references: [id], onDelete: Cascade)
+
+  @@id([blockingIssueId, blockedIssueId])
+  @@map("dependencies")
+}
+
+model Cycle {
+  id          String   @id @default(uuid())
+  workspaceId String   @map("workspace_id")
+  name        String
+  startDate   DateTime @map("start_date")
+  endDate     DateTime @map("end_date")
+  goal        String?
+  progress    Float?
+  active      Boolean  @default(false)
+
+  // Relations
+  workspace         Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  issues            Issue[]
+  teamPerformances  TeamPerformance[]
+
+  @@map("cycles")
+}
+
+model Milestone {
+  id          String    @id @default(uuid())
+  projectId   String    @map("project_id")
+  title       String
+  targetDate  DateTime  @map("target_date")
+  completed   Boolean   @default(false)
+  completedAt DateTime? @map("completed_at")
+
+  // Relations
+  project     Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  roadmapItems RoadmapItem[]
+
+  @@map("milestones")
+}
+
+model Automation {
+  id               String   @id @default(uuid())
+  workspaceId      String   @map("workspace_id")
+  name             String
+  triggerConditions Json    @map("trigger_conditions")
+  actions          Json
+  enabled          Boolean  @default(true)
+  createdBy        String   @map("created_by")
+  executionCount   Int      @default(0) @map("execution_count")
+  lastExecuted     DateTime? @map("last_executed")
+
+  // Relations
+  workspace        Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  creator          User               @relation(fields: [createdBy], references: [id])
+  automationActions AutomationAction[]
+
+  @@map("automations")
+}
+
+model AutomationAction {
+  id               String                @id @default(uuid())
+  automationId     String                @map("automation_id")
+  actionType       AutomationActionType  @map("action_type")
+  actionParameters Json                  @map("action_parameters")
+
+  // Relations
+  automation Automation @relation(fields: [automationId], references: [id], onDelete: Cascade)
+
+  @@map("automation_actions")
+}
+
+model Integration {
+  id            String           @id @default(uuid())
+  workspaceId   String           @map("workspace_id")
+  type          IntegrationType
+  configuration Json
+  enabled       Boolean          @default(true)
+
+  // Relations
+  workspace       Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  gitRepositories GitRepository[]
+
+  @@map("integrations")
+}
+
+model CustomView {
+  id           String  @id @default(uuid())
+  workspaceId  String  @map("workspace_id")
+  createdBy    String  @map("created_by")
+  name         String
+  filters      Json
+  columnConfig Json    @map("column_config")
+  shared       Boolean @default(false)
+
+  // Relations
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  creator   User      @relation(fields: [createdBy], references: [id])
+
+  @@map("custom_views")
+}
+
+model Activity {
+  id          String       @id @default(uuid())
+  userId      String       @map("user_id")
+  workspaceId String       @map("workspace_id")
+  actionType  ActivityType @map("action_type")
+  targetId    String       @map("target_id")
+  targetType  String       @map("target_type")
+  changes     Json?
+  createdAt   DateTime     @default(now()) @map("created_at")
+
+  // Relations
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("activities")
+}
+
+model Subscription {
+  id               String           @id @default(uuid())
+  workspaceId      String           @map("workspace_id")
+  tier             SubscriptionTier
+  startDate        DateTime         @map("start_date")
+  endDate          DateTime         @map("end_date")
+  storageLimit     Int              @map("storage_limit")
+  userLimit        Int              @map("user_limit")
+  automationLimit  Int              @map("automation_limit")
+
+  // Relations
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("subscriptions")
+}
+
+model GitRepository {
+  id                   String    @id @default(uuid())
+  workspaceId          String    @map("workspace_id")
+  integrationId        String    @map("integration_id")
+  provider             GitProvider
+  repoUrl              String    @map("repo_url")
+  accessTokenEncrypted String    @map("access_token_encrypted")
+  connectedAt          DateTime  @default(now()) @map("connected_at")
+
+  // Relations
+  workspace    Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  integration  Integration   @relation(fields: [integrationId], references: [id])
+  gitCommits   GitCommit[]
+  pullRequests PullRequest[]
+
+  @@map("git_repositories")
+}
+
+model GitCommit {
+  id           String   @id @default(uuid())
+  repositoryId String   @map("repository_id")
+  commitHash   String   @map("commit_hash")
+  message      String
+  author       String
+  committedAt  DateTime @map("committed_at")
+
+  // Relations
+  repository   GitRepository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  issueCommits IssueCommit[]
+
+  @@map("git_commits")
+}
+
+model IssueCommit {
+  issueId  String        @map("issue_id")
+  commitId String        @map("commit_id")
+  linkType CommitLinkType @map("link_type")
+
+  // Relations
+  issue  Issue     @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  commit GitCommit @relation(fields: [commitId], references: [id], onDelete: Cascade)
+
+  @@id([issueId, commitId])
+  @@map("issue_commits")
+}
+
+model PullRequest {
+  id           String          @id @default(uuid())
+  repositoryId String          @map("repository_id")
+  issueId      String?         @map("issue_id")
+  prNumber     String          @map("pr_number")
+  title        String
+  status       PullRequestStatus
+  url          String
+  createdAt    DateTime        @default(now()) @map("created_at")
+
+  // Relations
+  repository GitRepository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  issue      Issue?        @relation(fields: [issueId], references: [id])
+
+  @@map("pull_requests")
+}
+
+model Notification {
+  id          String           @id @default(uuid())
+  userId      String           @map("user_id")
+  workspaceId String           @map("workspace_id")
+  type        NotificationType
+  targetId    String           @map("target_id")
+  targetType  String           @map("target_type")
+  message     String
+  read        Boolean          @default(false)
+  createdAt   DateTime         @default(now()) @map("created_at")
+
+  // Relations
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
+}
+
+model NotificationChannel {
+  id            String                    @id @default(uuid())
+  userId        String                    @map("user_id")
+  type          NotificationChannelType
+  configuration Json
+  enabled       Boolean                   @default(true)
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notification_channels")
+}
+
+model Roadmap {
+  id                    String   @id @default(uuid())
+  workspaceId           String   @map("workspace_id")
+  name                  String
+  startDate             DateTime @map("start_date")
+  endDate               DateTime @map("end_date")
+  visualizationConfig   Json     @map("visualization_config")
+  createdBy             String   @map("created_by")
+
+  // Relations
+  workspace     Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  creator       User          @relation(fields: [createdBy], references: [id])
+  roadmapItems  RoadmapItem[]
+
+  @@map("roadmaps")
+}
+
+model RoadmapItem {
+  id           String  @id @default(uuid())
+  roadmapId    String  @map("roadmap_id")
+  projectId    String? @map("project_id")
+  milestoneId  String? @map("milestone_id")
+  displayOrder Int     @map("display_order")
+  color        String?
+
+  // Relations
+  roadmap   Roadmap    @relation(fields: [roadmapId], references: [id], onDelete: Cascade)
+  project   Project?   @relation(fields: [projectId], references: [id])
+  milestone Milestone? @relation(fields: [milestoneId], references: [id])
+
+  @@map("roadmap_items")
+}
+
+model Metric {
+  id            String     @id @default(uuid())
+  workspaceId   String     @map("workspace_id")
+  type          MetricType
+  data          Json
+  periodStart   DateTime   @map("period_start")
+  periodEnd     DateTime   @map("period_end")
+  calculatedAt  DateTime   @default(now()) @map("calculated_at")
+
+  // Relations
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("metrics")
+}
+
+model TeamPerformance {
+  id                     String @id @default(uuid())
+  workspaceId            String @map("workspace_id")
+  cycleId                String @map("cycle_id")
+  issuesCompleted        Int    @map("issues_completed")
+  storyPointsCompleted   Int    @map("story_points_completed")
+  velocity               Float
+  cycleTimeAvg           Float  @map("cycle_time_avg")
+
+  // Relations
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  cycle     Cycle     @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+
+  @@map("team_performances")
+}
+
+model DataExport {
+  id          String           @id @default(uuid())
+  workspaceId String           @map("workspace_id")
+  userId      String           @map("user_id")
+  format      ExportFormat
+  status      ExportStatus
+  fileUrl     String?          @map("file_url")
+  requestedAt DateTime         @default(now()) @map("requested_at")
+  completedAt DateTime?        @map("completed_at")
+
+  // Relations
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id])
+
+  @@map("data_exports")
+}
+
+model DataImport {
+  id            String       @id @default(uuid())
+  workspaceId   String       @map("workspace_id")
+  source        ImportSource
+  status        ImportStatus
+  mappingConfig Json         @map("mapping_config")
+  errorLog      String?      @map("error_log")
+  startedAt     DateTime     @default(now()) @map("started_at")
+  completedAt   DateTime?    @map("completed_at")
+
+  // Relations
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("data_imports")
+}
+
+model SearchIndex {
+  id                String       @id @default(uuid())
+  workspaceId       String       @map("workspace_id")
+  entityType        EntityType   @map("entity_type")
+  entityId          String       @map("entity_id")
+  searchableContent String       @map("searchable_content")
+  indexedAt         DateTime     @default(now()) @map("indexed_at")
+
+  // Relations
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("search_indices")
+}
+
+model OfflineSync {
+  id             String   @id @default(uuid())
+  userId         String   @map("user_id")
+  deviceId       String   @map("device_id")
+  cachedData     Json     @map("cached_data")
+  lastSync       DateTime @map("last_sync")
+  pendingChanges Json     @map("pending_changes")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("offline_sync")
+}
+
+model DeviceSession {
+  id          String     @id @default(uuid())
+  userId      String     @map("user_id")
+  deviceType  DeviceType @map("device_type")
+  deviceToken String     @map("device_token")
+  lastActive  DateTime   @default(now()) @map("last_active")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("device_sessions")
+}
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  workspaceId String   @map("workspace_id")
+  userId      String   @map("user_id")
+  action      String
+  targetType  String   @map("target_type")
+  targetId    String   @map("target_id")
+  changes     Json?
+  ipAddress   String   @map("ip_address")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  // Relations
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id])
+
+  @@map("audit_logs")
+}
+
+model SsoConfig {
+  id            String      @id @default(uuid())
+  workspaceId   String      @map("workspace_id")
+  provider      SsoProvider
+  configuration Json
+  enabled       Boolean     @default(false)
+
+  // Relations
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("sso_configs")
+}
+
+// Enums
+enum MembershipRole {
+  admin
+  member
+  guest
+}
+
+enum MembershipStatus {
+  active
+  pending
+  suspended
+}
+
+enum IssuePriority {
+  urgent
+  high
+  medium
+  low
+}
+
+enum IssueStatus {
+  todo
+  in_progress
+  done
+}
+
+enum DependencyType {
+  blocks
+  relates
+}
+
+enum AutomationActionType {
+  move_status
+  notify
+  create_task
+}
+
+enum IntegrationType {
+  github
+  gitlab
+  slack
+  figma
+}
+
+enum ActivityType {
+  create
+  update
+  delete
+  comment
+}
+
+enum SubscriptionTier {
+  free
+  team
+  enterprise
+}
+
+enum GitProvider {
+  github
+  gitlab
+  bitbucket
+}
+
+enum CommitLinkType {
+  fixes
+  references
+  closes
+}
+
+enum PullRequestStatus {
+  open
+  merged
+  closed
+}
+
+enum NotificationType {
+  mention
+  assignment
+  status_change
+}
+
+enum NotificationChannelType {
+  email
+  slack
+  in_app
+}
+
+enum MetricType {
+  velocity
+  burndown
+  cycle_time
+}
+
+enum ExportFormat {
+  csv
+  json
+}
+
+enum ExportStatus {
+  pending
+  processing
+  completed
+  failed
+}
+
+enum ImportSource {
+  jira
+  trello
+  asana
+}
+
+enum ImportStatus {
+  pending
+  processing
+  completed
+  failed
+}
+
+enum EntityType {
+  issue
+  project
+  comment
+}
+
+enum DeviceType {
+  ios
+  android
+  web
+}
+
+enum SsoProvider {
+  google
+  okta
+  azure
+} 
