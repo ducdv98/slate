@@ -3,6 +3,8 @@ import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
+import { GlobalExceptionFilter } from './common/filters';
+import { ResponseInterceptor } from './common/interceptors';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -15,6 +17,12 @@ async function bootstrap() {
     origin: configService.get<string>('app.corsOrigin'),
     credentials: true,
   });
+
+  // Global exception filter
+  app.useGlobalFilters(new GlobalExceptionFilter());
+
+  // Global response interceptor
+  app.useGlobalInterceptors(new ResponseInterceptor());
 
   // Global validation pipe
   app.useGlobalPipes(

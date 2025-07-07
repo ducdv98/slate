@@ -17,7 +17,8 @@
    - [x] Setup refresh token rotation
 
 3. **Core Services**
-   - [ ] Create global exception filter
+   - [x] Create global exception filter
+   - [x] Standardize API response
    - [ ] Implement request validation pipeline
    - [ ] Build logging interceptor
    - [ ] Configure environment management
