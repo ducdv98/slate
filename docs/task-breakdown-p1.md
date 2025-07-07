@@ -4,17 +4,17 @@
 
 1. **Project Initialization**
 
-   - [ ] Initialize NestJS project with TypeScript
-   - [ ] Configure ESLint + Prettier + Husky
-   - [ ] Setup Docker environment with Postgres
-   - [ ] Integrate Prisma ORM with schema matching ERD
+   - [x] Initialize NestJS project with TypeScript
+   - [x] Configure ESLint + Prettier + Husky
+   - [x] Setup Docker environment with Postgres
+   - [x] Integrate Prisma ORM with schema matching ERD
 
 2. **Authentication System**
 
-   - [ ] Implement JWT authentication module
-   - [ ] Create signup/login endpoints with password hashing
-   - [ ] Develop email verification flow
-   - [ ] Setup refresh token rotation
+   - [x] Implement JWT authentication module
+   - [x] Create signup/login endpoints with password hashing
+   - [x] Develop email verification flow
+   - [x] Setup refresh token rotation
 
 3. **Core Services**
    - [ ] Create global exception filter
