@@ -33,4 +33,4 @@ export class EmailVerificationResponseDto {
     example: true,
   })
   success: boolean;
-} 
+}

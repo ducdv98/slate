@@ -24,12 +24,31 @@ async function bootstrap() {
   // Global response interceptor
   app.useGlobalInterceptors(new ResponseInterceptor());
 
-  // Global validation pipe
+  // Enhanced global validation pipe
   app.useGlobalPipes(
     new ValidationPipe({
-      whitelist: true,
-      forbidNonWhitelisted: true,
-      transform: true,
+      // Security options
+      whitelist: true, // Remove properties not defined in DTOs
+      forbidNonWhitelisted: true, // Throw error for extra properties
+      forbidUnknownValues: true, // Forbid unknown objects
+
+      // Transformation options
+      transform: true, // Automatically transform payloads
+      transformOptions: {
+        enableImplicitConversion: true, // Auto-convert strings to numbers etc.
+      },
+
+      // Error handling options
+      disableErrorMessages: false, // Include error messages in production
+      validationError: {
+        target: false, // Don't expose the whole object in errors
+        value: false, // Don't expose the invalid value in errors
+      },
+
+      // Skip validation for missing properties marked as optional
+      skipMissingProperties: false,
+      skipNullProperties: false,
+      skipUndefinedProperties: false,
     }),
   );
 

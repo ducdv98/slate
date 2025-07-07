@@ -200,7 +200,7 @@ export class AuthController {
   ): Promise<{ message: string }> {
     try {
       // Extract token ID from refresh token
-      // eslint-disable-next-line @typescript-eslint/dot-notation
+
       const decoded = this.authService['jwtService'].verify<JwtPayload>(
         refreshTokenDto.refreshToken,
         {

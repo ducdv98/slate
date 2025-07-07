@@ -287,7 +287,7 @@ export class AuthService {
       // Verify the email verification token
       const decoded = this.jwtService.verify(token, {
         secret: this.configService.get<string>('auth.jwtSecret'),
-      }) as EmailVerificationPayload;
+      });
 
       // Validate token type
       if (decoded.type !== 'email-verification') {
