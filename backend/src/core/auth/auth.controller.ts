@@ -2,7 +2,6 @@ import {
   Controller,
   Post,
   Body,
-  Get,
   UseGuards,
   Request,
   HttpCode,
@@ -104,26 +103,6 @@ export class AuthController {
     @Body() refreshTokenDto: RefreshTokenDto,
   ): Promise<AuthTokensDto> {
     return this.authService.refreshTokens(refreshTokenDto.refreshToken);
-  }
-
-  @UseGuards(JwtAuthGuard)
-  @Get('profile')
-  @ApiBearerAuth()
-  @ApiOperation({
-    summary: 'Get user profile',
-    description: 'Get current authenticated user profile',
-  })
-  @ApiResponse({
-    status: HttpStatus.OK,
-    description: 'User profile retrieved successfully',
-    type: UserDto,
-  })
-  @ApiResponse({
-    status: HttpStatus.UNAUTHORIZED,
-    description: 'Invalid or missing JWT token',
-  })
-  getProfile(@Request() req: AuthenticatedRequest): UserDto {
-    return req.user as UserDto;
   }
 
   @Post('send-verification-email')

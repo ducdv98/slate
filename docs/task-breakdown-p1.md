@@ -27,8 +27,8 @@
 
 1. **User Management**
 
-   - [ ] User CRUD operations
-   - [ ] Profile management endpoints (avatar, timezone)
+   - [x] User CRUD operations (self-registration via signup, profile management)
+   - [x] Profile management endpoints (avatar, timezone, preferences)
    - [ ] Device session tracking
 
 2. **Workspace System**
