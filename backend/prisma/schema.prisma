@@ -571,11 +571,19 @@ model DeviceSession {
   userId      String     @map("user_id")
   deviceType  DeviceType @map("device_type")
   deviceToken String     @map("device_token")
+  deviceName  String?    @map("device_name")
+  userAgent   String?    @map("user_agent")
+  ipAddress   String     @map("ip_address")
+  location    String?    @map("location")
+  isActive    Boolean    @default(true) @map("is_active")
+  createdAt   DateTime   @default(now()) @map("created_at")
   lastActive  DateTime   @default(now()) @map("last_active")
+  expiresAt   DateTime?  @map("expires_at")
 
   // Relations
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@unique([userId, deviceToken])
   @@map("device_sessions")
 }
 

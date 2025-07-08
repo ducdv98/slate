@@ -11,6 +11,7 @@ import * as bcrypt from 'bcryptjs';
 import { User, RefreshToken } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
 import { MailerService } from '../mailer/mailer.service';
+import { DeviceSessionService } from '../../modules/users/device-session.service';
 import {
   SignupDto,
   LoginDto,
@@ -39,26 +40,41 @@ interface RefreshTokenPayload {
   tokenId: string;
 }
 
+interface DeviceSessionData {
+  deviceType: 'ios' | 'android' | 'web';
+  deviceToken: string;
+  deviceName?: string;
+  userAgent?: string;
+  ipAddress: string;
+  location?: string;
+}
+
 @Injectable()
 export class AuthService {
   private readonly prisma: PrismaService;
   private readonly jwtService: JwtService;
   private readonly configService: ConfigService;
   private readonly mailerService: MailerService;
+  private readonly deviceSessionService: DeviceSessionService;
 
   constructor(
     prisma: PrismaService,
     jwtService: JwtService,
     configService: ConfigService,
     mailerService: MailerService,
+    deviceSessionService: DeviceSessionService,
   ) {
     this.prisma = prisma;
     this.jwtService = jwtService;
     this.configService = configService;
     this.mailerService = mailerService;
+    this.deviceSessionService = deviceSessionService;
   }
 
-  async signup(signupDto: SignupDto): Promise<AuthResponseDto> {
+  async signup(
+    signupDto: SignupDto,
+    deviceSessionData?: DeviceSessionData,
+  ): Promise<AuthResponseDto> {
     const { name, email, password } = signupDto;
 
     // Check if user already exists
@@ -93,6 +109,19 @@ export class AuthService {
       data: { lastLogin: new Date() },
     });
 
+    // Create device session if device data is provided
+    if (deviceSessionData) {
+      try {
+        await this.deviceSessionService.createOrUpdateSession(
+          user.id,
+          deviceSessionData,
+        );
+      } catch (error) {
+        // Don't fail signup if device session creation fails
+        console.warn('Failed to create device session:', error);
+      }
+    }
+
     // Send verification email
     try {
       await this.sendVerificationEmail({ email: user.email });
@@ -107,7 +136,10 @@ export class AuthService {
     };
   }
 
-  async login(loginDto: LoginDto): Promise<AuthResponseDto> {
+  async login(
+    loginDto: LoginDto,
+    deviceSessionData?: DeviceSessionData,
+  ): Promise<AuthResponseDto> {
     const { email, password } = loginDto;
 
     // Find user by email
@@ -134,6 +166,19 @@ export class AuthService {
       where: { id: user.id },
       data: { lastLogin: new Date() },
     });
+
+    // Create or update device session if device data is provided
+    if (deviceSessionData) {
+      try {
+        await this.deviceSessionService.createOrUpdateSession(
+          user.id,
+          deviceSessionData,
+        );
+      } catch (error) {
+        // Don't fail login if device session creation fails
+        console.warn('Failed to create/update device session:', error);
+      }
+    }
 
     return {
       tokens,
@@ -436,6 +481,18 @@ export class AuthService {
       secret: this.configService.get<string>('auth.jwtSecret'),
       expiresIn: '24h', // Email verification tokens expire in 24 hours
     });
+  }
+
+  async updateDeviceSessionLastActive(
+    userId: string,
+    deviceToken: string,
+  ): Promise<void> {
+    try {
+      await this.deviceSessionService.updateLastActive(userId, deviceToken);
+    } catch (error) {
+      // Don't fail the request if device session update fails
+      console.warn('Failed to update device session last active:', error);
+    }
   }
 
   private mapUserToDto(user: User): UserDto {
