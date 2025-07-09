@@ -4,6 +4,7 @@ import { PrismaService } from './core/database/prisma.service';
 import { AuthModule } from './core/auth';
 import { UsersModule } from './modules/users/users.module';
 import { WorkspaceModule } from './modules/workspace/workspace.module';
+import { ProjectsModule } from './modules/projects/projects.module';
 import appConfig from './config/app.config';
 import authConfig from './config/auth.config';
 import databaseConfig from './config/database.config';
@@ -34,6 +35,7 @@ import { validate } from './config/env.validation';
     AuthModule,
     UsersModule,
     WorkspaceModule,
+    ProjectsModule,
   ],
   providers: [PrismaService],
   exports: [PrismaService],
