@@ -12,6 +12,9 @@ import { User, RefreshToken } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
 import { MailerService } from '../mailer/mailer.service';
 import { DeviceSessionService } from '../../modules/users/device-session.service';
+import { WorkspaceService } from '../../modules/workspace/workspace.service';
+import { InvitationService } from './services/invitation.service';
+import { AuditLogService } from '../../shared/services/audit-log.service';
 import {
   SignupDto,
   LoginDto,
@@ -25,6 +28,8 @@ import {
   SignupWithInvitationDto,
   InvitationInfoDto,
 } from './dto';
+import { CreateWorkspaceDto } from '../../modules/workspace/dto';
+import { AuditAction, AuditTargetType } from '../../shared/types/audit.types';
 
 interface JwtPayload {
   sub: string;
@@ -59,6 +64,9 @@ export class AuthService {
   private readonly configService: ConfigService;
   private readonly mailerService: MailerService;
   private readonly deviceSessionService: DeviceSessionService;
+  private readonly workspaceService: WorkspaceService;
+  private readonly invitationService: InvitationService;
+  private readonly auditLogService: AuditLogService;
 
   constructor(
     prisma: PrismaService,
@@ -66,12 +74,18 @@ export class AuthService {
     configService: ConfigService,
     mailerService: MailerService,
     deviceSessionService: DeviceSessionService,
+    workspaceService: WorkspaceService,
+    invitationService: InvitationService,
+    auditLogService: AuditLogService,
   ) {
     this.prisma = prisma;
     this.jwtService = jwtService;
     this.configService = configService;
     this.mailerService = mailerService;
     this.deviceSessionService = deviceSessionService;
+    this.workspaceService = workspaceService;
+    this.invitationService = invitationService;
+    this.auditLogService = auditLogService;
   }
 
   async signup(
@@ -102,6 +116,15 @@ export class AuthService {
         passwordHash,
       },
     });
+
+    // Log user signup
+    await this.auditLogService.logUserAction(
+      AuditAction.USER_SIGNUP,
+      user.id,
+      user.id,
+      { email: { after: user.email }, name: { after: user.name } },
+      deviceSessionData?.ipAddress,
+    );
 
     // Generate tokens with rotation
     const tokens = await this.generateTokensWithRotation(user.id, user.email);
@@ -151,6 +174,16 @@ export class AuthService {
     });
 
     if (!user) {
+      // Log failed login attempt
+      await this.auditLogService.logAction(
+        AuditAction.SECURITY_LOGIN_FAILED,
+        AuditTargetType.USER,
+        email,
+        undefined,
+        undefined,
+        { reason: { after: 'user_not_found' }, email: { after: email } },
+        deviceSessionData?.ipAddress,
+      );
       throw new UnauthorizedException('Invalid credentials');
     }
 
@@ -158,8 +191,25 @@ export class AuthService {
     const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
 
     if (!isPasswordValid) {
+      // Log failed login attempt
+      await this.auditLogService.logUserAction(
+        AuditAction.SECURITY_LOGIN_FAILED,
+        user.id,
+        user.id,
+        { reason: { after: 'invalid_password' }, email: { after: email } },
+        deviceSessionData?.ipAddress,
+      );
       throw new UnauthorizedException('Invalid credentials');
     }
+
+    // Log successful login
+    await this.auditLogService.logUserAction(
+      AuditAction.USER_LOGIN,
+      user.id,
+      user.id,
+      { email: { after: user.email } },
+      deviceSessionData?.ipAddress,
+    );
 
     // Generate tokens with rotation
     const tokens = await this.generateTokensWithRotation(user.id, user.email);
@@ -368,6 +418,14 @@ export class AuthService {
         data: { emailVerified: true },
       });
 
+      // Log email verification
+      await this.auditLogService.logUserAction(
+        AuditAction.USER_EMAIL_VERIFY,
+        user.id,
+        user.id,
+        { email: { after: user.email }, emailVerified: { after: true } },
+      );
+
       return {
         message: 'Email verified successfully',
         success: true,
@@ -438,7 +496,18 @@ export class AuthService {
     email: string,
   ): Promise<AuthTokensDto> {
     // Generate new tokens
-    const newTokens = await this.generateTokensWithRotation(userId, email);
+    const newTokens = await this.generateTokensWithRotation(
+      oldToken.user.id,
+      oldToken.user.email,
+    );
+
+    // Log token refresh
+    await this.auditLogService.logUserAction(
+      AuditAction.SECURITY_TOKEN_REFRESH,
+      oldToken.user.id,
+      oldToken.user.id,
+      { email: { after: oldToken.user.email } },
+    );
 
     // Revoke the old token and link to new one
     await this.prisma.refreshToken.update({
@@ -520,10 +589,37 @@ export class AuthService {
       ipAddress: ipAddress || 'Unknown',
     });
 
-    // TODO: Create workspace and add user as admin
-    // This will be implemented when workspace service is properly integrated
+    try {
+      // Create workspace and make user an admin
+      const createWorkspaceDto: CreateWorkspaceDto = {
+        name: signupData.workspaceName,
+        description: signupData.workspaceDescription,
+      };
 
-    return authResponse;
+      const workspace = await this.workspaceService.create(
+        createWorkspaceDto,
+        authResponse.user.id,
+      );
+
+      // Log successful workspace creation during signup
+      console.log(
+        `✅ User ${authResponse.user.email} signed up with workspace: ${workspace.name}`,
+      );
+
+      // Note: We return the same AuthResponseDto format for consistency
+      // The workspace information is logged and available via workspace endpoints
+      return authResponse;
+    } catch (error) {
+      // If workspace creation fails, we still have a valid user account
+      // Log the error and let the user create a workspace later
+      console.warn(
+        `⚠️ Failed to create workspace for user ${authResponse.user.email}:`,
+        error,
+      );
+
+      // Still return successful auth response since user creation succeeded
+      return authResponse;
+    }
   }
 
   /**
@@ -534,7 +630,34 @@ export class AuthService {
     ipAddress?: string,
     userAgent?: string,
   ): Promise<AuthResponseDto> {
-    // Create user first
+    // First, verify the invitation token to get workspace info
+    const invitationInfo = await this.invitationService.verifyInvitationToken(
+      signupData.invitationToken,
+    );
+
+    // Decode the token to get the invited email for validation
+    let invitedEmail: string;
+    try {
+      const decodedToken = this.jwtService.decode(
+        signupData.invitationToken,
+      ) as { email?: string } | null;
+      invitedEmail = decodedToken?.email || '';
+    } catch {
+      throw new BadRequestException('Invalid invitation token format');
+    }
+
+    if (!invitedEmail) {
+      throw new BadRequestException('Invalid invitation token: missing email');
+    }
+
+    // Verify that the email in signup matches the invitation
+    if (signupData.email !== invitedEmail) {
+      throw new BadRequestException(
+        `This invitation was sent to ${invitedEmail}. Please use the correct email address or request a new invitation.`,
+      );
+    }
+
+    // Create user account first
     const userDto = {
       name: signupData.name,
       email: signupData.email,
@@ -548,19 +671,50 @@ export class AuthService {
       ipAddress: ipAddress || 'Unknown',
     });
 
-    // TODO: Accept invitation and add user to workspace
-    // This will be implemented when invitation service is properly integrated
+    try {
+      // Accept the invitation and add user to workspace
+      await this.invitationService.acceptInvitation(
+        signupData.invitationToken,
+        authResponse.user.id,
+        ipAddress,
+      );
 
-    return authResponse;
+      // Log successful invitation acceptance
+      console.log(
+        `✅ User ${authResponse.user.email} accepted invitation to workspace: ${invitationInfo.workspace.name}`,
+      );
+
+      // Return the auth response with user now being a member of the workspace
+      return authResponse;
+    } catch (error) {
+      // If invitation acceptance fails, we still have a valid user account
+      // but they won't be added to the workspace
+      console.warn(
+        `⚠️ Failed to accept invitation for user ${authResponse.user.email}:`,
+        error,
+      );
+
+      // Since invitation acceptance is critical for this flow, we should throw an error
+      throw new BadRequestException(
+        `User account created but failed to join workspace: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      );
+    }
   }
 
   /**
    * Get invitation information
    */
   async getInvitationInfo(token: string): Promise<InvitationInfoDto> {
-    // TODO: Implement invitation verification
-    await Promise.resolve(); // Temporary to satisfy async requirement
-    throw new NotFoundException(`Invitation service not yet implemented for token: ${token}`);
+    try {
+      return await this.invitationService.getInvitationInfo(token);
+    } catch (error) {
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+      throw new NotFoundException(
+        `Invalid or expired invitation token: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      );
+    }
   }
 
   private mapUserToDto(user: User): UserDto {

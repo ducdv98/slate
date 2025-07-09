@@ -8,11 +8,15 @@ import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { JwtStrategy, LocalStrategy } from './strategies';
 import { UsersModule } from '../../modules/users/users.module';
+import { WorkspaceModule } from '../../modules/workspace/workspace.module';
+import { InvitationService } from './services/invitation.service';
+import { AuditLogService } from '../../shared/services/audit-log.service';
 
 @Module({
   imports: [
     PassportModule,
     UsersModule,
+    WorkspaceModule,
     JwtModule.registerAsync({
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => ({
@@ -30,6 +34,8 @@ import { UsersModule } from '../../modules/users/users.module';
     LocalStrategy,
     PrismaService,
     MailerService,
+    InvitationService,
+    AuditLogService,
   ],
   exports: [AuthService, JwtModule],
 })

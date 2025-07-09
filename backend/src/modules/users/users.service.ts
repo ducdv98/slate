@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { User } from '@prisma/client';
 import { PrismaService } from '../../core/database/prisma.service';
+import { AuditLogService } from '../../shared/services/audit-log.service';
 import {
   UpdateUserDto,
   UpdatePreferencesDto,
@@ -12,10 +13,14 @@ import {
   NotificationPreferencesDto,
   KeyboardShortcutsDto,
 } from './dto';
+import { AuditAction } from '../../shared/types/audit.types';
 
 @Injectable()
 export class UsersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly auditLogService: AuditLogService,
+  ) {}
 
   async findAll(
     page = 1,
@@ -85,6 +90,9 @@ export class UsersService {
       throw new NotFoundException('User not found');
     }
 
+    // Track changes for audit logging
+    const changes: Record<string, { before?: any; after?: any }> = {};
+
     // If email is being updated, check for conflicts
     if (email && email !== existingUser.email) {
       const emailExists = await this.prisma.user.findUnique({
@@ -94,6 +102,18 @@ export class UsersService {
       if (emailExists) {
         throw new ConflictException('User with this email already exists');
       }
+      changes.email = { before: existingUser.email, after: email };
+    }
+
+    // Track other changes
+    if (name && name !== existingUser.name) {
+      changes.name = { before: existingUser.name, after: name };
+    }
+    if (avatarUrl !== undefined && avatarUrl !== existingUser.avatarUrl) {
+      changes.avatarUrl = { before: existingUser.avatarUrl, after: avatarUrl };
+    }
+    if (timezone && timezone !== existingUser.timezone) {
+      changes.timezone = { before: existingUser.timezone, after: timezone };
     }
 
     // Update user
@@ -106,6 +126,16 @@ export class UsersService {
         ...(timezone && { timezone }),
       },
     });
+
+    // Log profile update if there were changes
+    if (Object.keys(changes).length > 0) {
+      await this.auditLogService.logUserAction(
+        AuditAction.USER_PROFILE_UPDATE,
+        id,
+        id,
+        changes,
+      );
+    }
 
     return this.mapUserToProfileDto(updatedUser);
   }
@@ -125,6 +155,9 @@ export class UsersService {
       throw new NotFoundException('User not found');
     }
 
+    // Track changes for audit logging
+    const changes: Record<string, { before?: any; after?: any }> = {};
+
     // Merge preferences with existing ones
     const updatedNotificationPreferences = notificationPreferences
       ? {
@@ -140,6 +173,20 @@ export class UsersService {
         }
       : existingUser.keyboardShortcuts;
 
+    // Track preference changes
+    if (notificationPreferences) {
+      changes.notificationPreferences = {
+        before: existingUser.notificationPreferences,
+        after: updatedNotificationPreferences,
+      };
+    }
+    if (keyboardShortcuts) {
+      changes.keyboardShortcuts = {
+        before: existingUser.keyboardShortcuts,
+        after: updatedKeyboardShortcuts,
+      };
+    }
+
     // Update user preferences
     const updatedUser = await this.prisma.user.update({
       where: { id },
@@ -148,6 +195,16 @@ export class UsersService {
         keyboardShortcuts: updatedKeyboardShortcuts,
       },
     });
+
+    // Log preference update if there were changes
+    if (Object.keys(changes).length > 0) {
+      await this.auditLogService.logUserAction(
+        AuditAction.USER_PROFILE_UPDATE,
+        id,
+        id,
+        changes,
+      );
+    }
 
     return this.mapUserToProfileDto(updatedUser);
   }

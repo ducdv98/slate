@@ -5,6 +5,7 @@ import { UsersService } from './users.service';
 import { UsersController } from './users.controller';
 import { DeviceSessionService } from './device-session.service';
 import { DeviceSessionInterceptor } from '../../common/interceptors';
+import { AuditLogService } from '../../shared/services/audit-log.service';
 
 @Module({
   controllers: [UsersController],
@@ -12,6 +13,7 @@ import { DeviceSessionInterceptor } from '../../common/interceptors';
     UsersService,
     DeviceSessionService,
     PrismaService,
+    AuditLogService,
     {
       provide: APP_INTERCEPTOR,
       useClass: DeviceSessionInterceptor,

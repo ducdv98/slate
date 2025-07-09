@@ -90,6 +90,54 @@ export class MailerService {
     }
   }
 
+  async sendInvitationEmail(invitationData: {
+    email: string;
+    inviterName: string;
+    workspaceName: string;
+    invitationToken: string;
+    role: string;
+  }) {
+    const frontendUrl =
+      this.configService.get<string>('app.frontendUrl') ||
+      'http://localhost:3000';
+    const invitationUrl = `${frontendUrl}/join?token=${invitationData.invitationToken}`;
+
+    const mailOptions = {
+      from: this.configService.get<string>('MAIL_FROM') || 'noreply@slate.dev',
+      to: invitationData.email,
+      subject: `You're invited to join ${invitationData.workspaceName} on Slate`,
+      html: this.getInvitationEmailTemplate(invitationData, invitationUrl),
+    };
+
+    try {
+      if (!this.transporter) {
+        // Development fallback - log to console
+        this.logger.log(
+          'Invitation email would be sent to:',
+          invitationData.email,
+        );
+        this.logger.log('Invitation URL:', invitationUrl);
+        this.logger.log('Inviter:', invitationData.inviterName);
+        this.logger.log('Workspace:', invitationData.workspaceName);
+        return { success: true, messageId: 'dev-console-log' };
+      }
+
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      const info = await this.transporter.sendMail(mailOptions);
+
+      // Log preview URL for Ethereal Email in development
+      if (process.env.NODE_ENV !== 'production') {
+        this.logger.log('Preview URL: ' + nodemailer.getTestMessageUrl(info));
+      }
+
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+      return { success: true, messageId: info.messageId };
+    } catch (error) {
+      this.logger.error('Failed to send invitation email', error);
+      throw new Error('Failed to send invitation email');
+    }
+  }
+
   private getVerificationEmailTemplate(verificationUrl: string): string {
     return `
       <!DOCTYPE html>
@@ -124,6 +172,56 @@ export class MailerService {
             </p>
             <p><strong>This link will expire in 24 hours.</strong></p>
             <p>If you didn't create an account with Slate, you can safely ignore this email.</p>
+          </div>
+          <div class="footer">
+            <p>&copy; 2024 Slate. All rights reserved.</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+  }
+
+  private getInvitationEmailTemplate(
+    invitationData: {
+      email: string;
+      inviterName: string;
+      workspaceName: string;
+      invitationToken: string;
+      role: string;
+    },
+    invitationUrl: string,
+  ): string {
+    return `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <title>You're Invited to Join ${invitationData.workspaceName}</title>
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background: #f8f9fa; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
+          .content { background: white; padding: 30px; border: 1px solid #dee2e6; }
+          .footer { background: #f8f9fa; padding: 20px; text-align: center; border-radius: 0 0 8px 8px; }
+          .btn { display: inline-block; padding: 12px 24px; background: #007bff; color: white; text-decoration: none; border-radius: 4px; }
+          .btn:hover { background: #0056b3; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>You're Invited to Join ${invitationData.workspaceName}</h1>
+          </div>
+          <div class="content">
+            <p>${invitationData.inviterName} has invited you to join ${invitationData.workspaceName} on Slate.</p>
+            <p>You have been invited with the role of "${invitationData.role}".</p>
+            <p>To accept this invitation, please click the button below:</p>
+            <p style="text-align: center; margin: 30px 0;">
+              <a href="${invitationUrl}" class="btn">Accept Invitation</a>
+            </p>
+            <p>If you don't want to join ${invitationData.workspaceName}, you can simply ignore this email.</p>
+            <p>This invitation will expire in 7 days.</p>
           </div>
           <div class="footer">
             <p>&copy; 2024 Slate. All rights reserved.</p>

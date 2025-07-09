@@ -6,6 +6,7 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../../database/prisma.service';
 import { ConfigService } from '@nestjs/config';
+import { MailerService } from '../../mailer/mailer.service';
 import {
   CreateInvitationDto,
   InvitationTokenDto,
@@ -33,6 +34,7 @@ export class InvitationService {
     private readonly jwt: JwtService,
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
+    private readonly mailer: MailerService,
     private readonly auditLog: AuditLogService,
   ) {}
 
@@ -121,6 +123,20 @@ export class InvitationService {
       { email: { after: data.email }, role: { after: data.role } },
       ipAddress,
     );
+
+    // Send invitation email
+    try {
+      await this.mailer.sendInvitationEmail({
+        email: data.email,
+        inviterName: inviter.name,
+        workspaceName: workspace.name,
+        invitationToken: token,
+        role: data.role || MembershipRole.MEMBER,
+      });
+    } catch (error) {
+      // Don't fail invitation creation if email sending fails
+      console.warn(`Failed to send invitation email to ${data.email}:`, error);
+    }
 
     return {
       token,

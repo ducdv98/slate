@@ -37,6 +37,7 @@ import {
   CanRemoveMembers,
 } from '../../common/decorators/workspace-permissions.decorator';
 import { WorkspaceService } from './workspace.service';
+import { InvitationService } from '../../core/auth/services/invitation.service';
 import {
   PermissionService,
   UserWorkspacePermissions,
@@ -50,6 +51,10 @@ import {
   WorkspaceMemberDto,
   WorkspaceMembersListDto,
 } from './dto';
+import {
+  CreateInvitationDto,
+  InvitationTokenDto,
+} from '../../core/auth/dto/invitation.dto';
 import { UuidValidationPipe } from '../../common/pipes/uuid-validation.pipe';
 import { ApiResponse } from '../../shared/types/response.types';
 import { ResponseUtil } from '../../shared/utils/response.util';
@@ -57,6 +62,7 @@ import { PermissionOverride } from '../../shared/constants/permissions.constants
 
 interface AuthenticatedRequest extends Request {
   user: { id: string; email: string };
+  ip?: string;
 }
 
 @ApiTags('Workspaces')
@@ -67,6 +73,7 @@ export class WorkspaceController {
   constructor(
     private readonly workspaceService: WorkspaceService,
     private readonly permissionService: PermissionService,
+    private readonly invitationService: InvitationService,
   ) {}
 
   @Post()
@@ -360,6 +367,59 @@ export class WorkspaceController {
       req.user.id,
     );
     return ResponseUtil.created(member, 'Member invited successfully');
+  }
+
+  @Post(':id/invitations')
+  @UseGuards(WorkspacePermissionGuard)
+  @CanInviteMembers()
+  @ApiOperation({
+    summary: 'Create workspace invitation',
+    description: 'Create an invitation token for a user to join the workspace',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'Workspace ID',
+    type: String,
+  })
+  @ApiBody({
+    type: CreateInvitationDto,
+    description: 'Invitation creation data',
+  })
+  @ApiResponseDecorator({
+    status: HttpStatus.CREATED,
+    description: 'Invitation created successfully',
+    type: InvitationTokenDto,
+  })
+  @ApiResponseDecorator({
+    status: HttpStatus.NOT_FOUND,
+    description: 'Workspace not found',
+  })
+  @ApiResponseDecorator({
+    status: HttpStatus.FORBIDDEN,
+    description: 'You do not have permission to invite members',
+  })
+  @ApiResponseDecorator({
+    status: HttpStatus.UNAUTHORIZED,
+    description: 'Invalid or missing JWT token',
+  })
+  async createInvitation(
+    @Param('id', UuidValidationPipe) id: string,
+    @Body() createInvitationDto: CreateInvitationDto,
+    @Request() req: AuthenticatedRequest,
+  ): Promise<ApiResponse<InvitationTokenDto>> {
+    // Override workspaceId with the one from the URL parameter
+    const invitationData = {
+      ...createInvitationDto,
+      workspaceId: id,
+    };
+
+    const invitation = await this.invitationService.createInvitation(
+      req.user.id,
+      invitationData,
+      req.ip,
+    );
+
+    return ResponseUtil.created(invitation, 'Invitation created successfully');
   }
 
   @Patch(':id/members/:memberId')

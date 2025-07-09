@@ -1,16 +1,21 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { DeviceSession, DeviceType } from '@prisma/client';
 import { PrismaService } from '../../core/database/prisma.service';
+import { AuditLogService } from '../../shared/services/audit-log.service';
 import {
   CreateDeviceSessionDto,
   UpdateDeviceSessionDto,
   DeviceSessionDto,
   DeviceSessionListDto,
 } from './dto';
+import { AuditAction } from '../../shared/types/audit.types';
 
 @Injectable()
 export class DeviceSessionService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly auditLogService: AuditLogService,
+  ) {}
 
   async createOrUpdateSession(
     userId: string,
@@ -38,6 +43,20 @@ export class DeviceSessionService {
           isActive: true,
         },
       });
+
+      // Log session update
+      await this.auditLogService.logUserAction(
+        AuditAction.SECURITY_SESSION_TERMINATE,
+        userId,
+        updatedSession.id,
+        {
+          deviceType: { after: updatedSession.deviceType },
+          deviceName: { after: updatedSession.deviceName },
+          ipAddress: { after: updatedSession.ipAddress },
+        },
+        updatedSession.ipAddress,
+      );
+
       return this.mapToDto(updatedSession);
     }
 
@@ -51,6 +70,19 @@ export class DeviceSessionService {
         isActive: true,
       },
     });
+
+    // Log new session creation
+    await this.auditLogService.logUserAction(
+      AuditAction.SECURITY_SESSION_TERMINATE,
+      userId,
+      newSession.id,
+      {
+        deviceType: { after: newSession.deviceType },
+        deviceName: { after: newSession.deviceName },
+        ipAddress: { after: newSession.ipAddress },
+      },
+      newSession.ipAddress,
+    );
 
     return this.mapToDto(newSession);
   }
@@ -124,14 +156,46 @@ export class DeviceSessionService {
       data: { isActive: false },
     });
 
+    // Log session revocation
+    await this.auditLogService.logUserAction(
+      AuditAction.SECURITY_SESSION_TERMINATE,
+      userId,
+      sessionId,
+      {
+        deviceType: { before: session.deviceType },
+        isActive: { before: true, after: false },
+      },
+      session.ipAddress,
+    );
+
     return this.mapToDto(updatedSession);
   }
 
   async revokeAllUserSessions(userId: string): Promise<void> {
+    // Get sessions before revoking for audit logging
+    const sessions = await this.prisma.deviceSession.findMany({
+      where: { userId, isActive: true },
+    });
+
     await this.prisma.deviceSession.updateMany({
       where: { userId, isActive: true },
       data: { isActive: false },
     });
+
+    // Log session revocations
+    for (const session of sessions) {
+      await this.auditLogService.logUserAction(
+        AuditAction.SECURITY_SESSION_TERMINATE,
+        userId,
+        session.id,
+        {
+          deviceType: { before: session.deviceType },
+          isActive: { before: true, after: false },
+          reason: { after: 'bulk_revocation' },
+        },
+        session.ipAddress,
+      );
+    }
   }
 
   async revokeAllUserSessionsExceptCurrent(
