@@ -19,10 +19,18 @@ import {
   MembershipStatus,
   BillingTier,
 } from './dto';
+import { PermissionService } from './services/permission.service';
+import { WorkspacePermission } from '../../shared/constants/permissions.constants';
+import { AuditLogService } from '../../shared/services/audit-log.service';
+import { AuditAction } from '../../shared/types/audit.types';
 
 @Injectable()
 export class WorkspaceService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly permissionService: PermissionService,
+    private readonly auditLogService: AuditLogService,
+  ) {}
 
   async create(
     createWorkspaceDto: CreateWorkspaceDto,
@@ -78,6 +86,14 @@ export class WorkspaceService {
         },
       },
     });
+
+    // Log workspace creation
+    await this.auditLogService.logWorkspaceAction(
+      AuditAction.WORKSPACE_CREATE,
+      workspace.id,
+      userId,
+      workspace.id,
+    );
 
     return this.mapWorkspaceToDto(workspace, workspace.memberships[0]);
   }
@@ -145,6 +161,13 @@ export class WorkspaceService {
       throw new ForbiddenException('You do not have access to this workspace');
     }
 
+    await this.auditLogService.logWorkspaceAction(
+      AuditAction.WORKSPACE_UPDATE, // Using update action for view tracking
+      id,
+      userId,
+      id,
+    );
+
     return this.mapWorkspaceToDto(workspace, workspace.memberships[0]);
   }
 
@@ -197,14 +220,31 @@ export class WorkspaceService {
       },
     });
 
+    await this.auditLogService.logWorkspaceAction(
+      AuditAction.WORKSPACE_UPDATE,
+      id,
+      userId,
+      id,
+    );
+
     return this.mapWorkspaceToDto(workspace, workspace.memberships[0]);
   }
 
   async remove(id: string, userId: string): Promise<void> {
-    // Check if user has admin access to the workspace
-    await this.validateAdminAccess(id, userId);
+    // Check if user has permission to delete workspace
+    const hasDeletePermission = await this.permissionService.hasPermission(
+      userId,
+      id,
+      WorkspacePermission.DELETE_WORKSPACE,
+    );
 
-    // Check if this is the only admin
+    if (!hasDeletePermission) {
+      throw new ForbiddenException(
+        'You do not have permission to delete this workspace',
+      );
+    }
+
+    // Check if this is the only admin (still need this business rule)
     const adminCount = await this.prisma.membership.count({
       where: {
         workspaceId: id,
@@ -222,6 +262,13 @@ export class WorkspaceService {
     await this.prisma.workspace.delete({
       where: { id },
     });
+
+    await this.auditLogService.logWorkspaceAction(
+      AuditAction.WORKSPACE_DELETE,
+      id,
+      userId,
+      id,
+    );
   }
 
   // Membership management methods
@@ -326,6 +373,13 @@ export class WorkspaceService {
       },
     });
 
+    await this.auditLogService.logWorkspaceAction(
+      AuditAction.WORKSPACE_MEMBER_INVITE,
+      workspaceId,
+      userId,
+      membership.id,
+    );
+
     return {
       id: membership.user.id,
       name: membership.user.name,
@@ -402,6 +456,13 @@ export class WorkspaceService {
       },
     });
 
+    await this.auditLogService.logWorkspaceAction(
+      AuditAction.WORKSPACE_MEMBER_ROLE_UPDATE,
+      workspaceId,
+      userId,
+      updatedMembership.id,
+    );
+
     return {
       id: updatedMembership.user.id,
       name: updatedMembership.user.name,
@@ -467,6 +528,13 @@ export class WorkspaceService {
         },
       },
     });
+
+    await this.auditLogService.logWorkspaceAction(
+      AuditAction.WORKSPACE_MEMBER_REMOVE,
+      workspaceId,
+      userId,
+      membership.id,
+    );
   }
 
   // Private helper methods

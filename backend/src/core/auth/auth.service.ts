@@ -21,6 +21,9 @@ import {
   SendVerificationEmailDto,
   VerifyEmailDto,
   EmailVerificationResponseDto,
+  SignupWithWorkspaceDto,
+  SignupWithInvitationDto,
+  InvitationInfoDto,
 } from './dto';
 
 interface JwtPayload {
@@ -493,6 +496,71 @@ export class AuthService {
       // Don't fail the request if device session update fails
       console.warn('Failed to update device session last active:', error);
     }
+  }
+
+  /**
+   * Sign up with workspace creation
+   */
+  async signupWithWorkspace(
+    signupData: SignupWithWorkspaceDto,
+    ipAddress?: string,
+    userAgent?: string,
+  ): Promise<AuthResponseDto> {
+    // Create user first
+    const userDto = {
+      name: signupData.name,
+      email: signupData.email,
+      password: signupData.password,
+    };
+
+    const authResponse = await this.signup(userDto, {
+      deviceType: 'web',
+      deviceToken: `web-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      userAgent: userAgent || 'Unknown',
+      ipAddress: ipAddress || 'Unknown',
+    });
+
+    // TODO: Create workspace and add user as admin
+    // This will be implemented when workspace service is properly integrated
+
+    return authResponse;
+  }
+
+  /**
+   * Sign up with invitation token
+   */
+  async signupWithInvitation(
+    signupData: SignupWithInvitationDto,
+    ipAddress?: string,
+    userAgent?: string,
+  ): Promise<AuthResponseDto> {
+    // Create user first
+    const userDto = {
+      name: signupData.name,
+      email: signupData.email,
+      password: signupData.password,
+    };
+
+    const authResponse = await this.signup(userDto, {
+      deviceType: 'web',
+      deviceToken: `web-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      userAgent: userAgent || 'Unknown',
+      ipAddress: ipAddress || 'Unknown',
+    });
+
+    // TODO: Accept invitation and add user to workspace
+    // This will be implemented when invitation service is properly integrated
+
+    return authResponse;
+  }
+
+  /**
+   * Get invitation information
+   */
+  async getInvitationInfo(token: string): Promise<InvitationInfoDto> {
+    // TODO: Implement invitation verification
+    await Promise.resolve(); // Temporary to satisfy async requirement
+    throw new NotFoundException(`Invitation service not yet implemented for token: ${token}`);
   }
 
   private mapUserToDto(user: User): UserDto {

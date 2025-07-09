@@ -604,18 +604,20 @@ model RefreshToken {
 
 model AuditLog {
   id          String   @id @default(uuid())
-  workspaceId String   @map("workspace_id")
-  userId      String   @map("user_id")
+  workspaceId String?  @map("workspace_id") // Optional for user-level actions
+  userId      String?  @map("user_id")      // Optional for system actions
   action      String
   targetType  String   @map("target_type")
   targetId    String   @map("target_id")
   changes     Json?
-  ipAddress   String   @map("ip_address")
+  ipAddress   String?  @map("ip_address")
+  userAgent   String?  @map("user_agent")
+  metadata    Json?
   createdAt   DateTime @default(now()) @map("created_at")
 
   // Relations
-  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  user      User      @relation(fields: [userId], references: [id])
+  workspace Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User?      @relation(fields: [userId], references: [id])
 
   @@map("audit_logs")
 }

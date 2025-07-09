@@ -33,9 +33,9 @@
 
 2. **Workspace System**
    - [x] Workspace CRUD operations
-   - [ ] Membership management (invite/join/remove)
-   - [ ] Role-based access control (admin/member)
-   - [ ] Workspace activity logging
+   - [x] Membership management (invite/join/remove)
+   - [x] Role-based access control (admin/member/guest)
+   - [x] Workspace activity logging (audit system)
 
 ## Project & Issue Module
 

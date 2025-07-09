@@ -2,37 +2,48 @@ import {
   Controller,
   Post,
   Body,
-  UseGuards,
-  Request,
   HttpCode,
   HttpStatus,
+  Request,
   Headers,
+  Get,
+  Param,
+  UseGuards,
 } from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
-  ApiResponse,
+  ApiResponse as SwaggerApiResponse,
   ApiBody,
   ApiBearerAuth,
+  ApiParam,
 } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './guards';
 import {
-  SignupDto,
   LoginDto,
+  SignupDto,
   RefreshTokenDto,
   AuthResponseDto,
   AuthTokensDto,
   UserDto,
-  SendVerificationEmailDto,
   VerifyEmailDto,
+  SendVerificationEmailDto,
   EmailVerificationResponseDto,
+  SignupWithWorkspaceDto,
+  SignupWithInvitationDto,
+  InvitationInfoDto,
 } from './dto';
-import { JwtPayload } from 'jsonwebtoken';
+import { ApiResponse } from '../../shared/types/response.types';
 import { Request as ExpressRequest } from 'express';
 
+interface UserPayload extends UserDto {
+  iat: number;
+  exp: number;
+}
+
 interface AuthenticatedRequest extends ExpressRequest {
-  user: AuthResponseDto | UserDto;
+  user: UserPayload;
 }
 
 @ApiTags('Authentication')
@@ -92,20 +103,20 @@ export class AuthController {
   @Post('signup')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
-    summary: 'User registration',
-    description: 'Register a new user account',
+    summary: 'Register new user',
+    description: 'Create a new user account with email and password',
   })
   @ApiBody({ type: SignupDto })
-  @ApiResponse({
+  @SwaggerApiResponse({
     status: HttpStatus.CREATED,
     description: 'User successfully registered',
     type: AuthResponseDto,
   })
-  @ApiResponse({
+  @SwaggerApiResponse({
     status: HttpStatus.CONFLICT,
     description: 'User with this email already exists',
   })
-  @ApiResponse({
+  @SwaggerApiResponse({
     status: HttpStatus.BAD_REQUEST,
     description: 'Invalid input data',
   })
@@ -118,6 +129,66 @@ export class AuthController {
     return this.authService.signup(signupDto, deviceSessionData);
   }
 
+  @Post('signup/with-workspace')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({
+    summary: 'Sign up and create workspace',
+    description:
+      'Create new user account and automatically create their first workspace',
+  })
+  @SwaggerApiResponse({
+    status: 201,
+    description: 'User and workspace created successfully',
+    type: AuthResponseDto,
+  })
+  async signupWithWorkspace(
+    @Body() signupData: SignupWithWorkspaceDto,
+    @Request() req: ExpressRequest,
+  ): Promise<ApiResponse<AuthResponseDto>> {
+    const result = await this.authService.signupWithWorkspace(
+      signupData,
+      req.ip,
+      req.headers['user-agent'],
+    );
+
+    return {
+      success: true,
+      statusCode: 201,
+      message: 'User and workspace created successfully',
+      data: result,
+    };
+  }
+
+  @Post('signup/with-invitation')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({
+    summary: 'Sign up with invitation',
+    description:
+      'Create new user account and join workspace via invitation token',
+  })
+  @SwaggerApiResponse({
+    status: 201,
+    description: 'User created and added to workspace successfully',
+    type: AuthResponseDto,
+  })
+  async signupWithInvitation(
+    @Body() signupData: SignupWithInvitationDto,
+    @Request() req: ExpressRequest,
+  ): Promise<ApiResponse<AuthResponseDto>> {
+    const result = await this.authService.signupWithInvitation(
+      signupData,
+      req.ip,
+      req.headers['user-agent'],
+    );
+
+    return {
+      success: true,
+      statusCode: 201,
+      message: 'User created and added to workspace successfully',
+      data: result,
+    };
+  }
+
   @Post('login')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
@@ -125,12 +196,12 @@ export class AuthController {
     description: 'Authenticate user and return JWT tokens',
   })
   @ApiBody({ type: LoginDto })
-  @ApiResponse({
+  @SwaggerApiResponse({
     status: HttpStatus.OK,
     description: 'User successfully authenticated',
     type: AuthResponseDto,
   })
-  @ApiResponse({
+  @SwaggerApiResponse({
     status: HttpStatus.UNAUTHORIZED,
     description: 'Invalid credentials',
   })
@@ -150,12 +221,12 @@ export class AuthController {
     description: 'Get new access token using refresh token',
   })
   @ApiBody({ type: RefreshTokenDto })
-  @ApiResponse({
+  @SwaggerApiResponse({
     status: HttpStatus.OK,
     description: 'Tokens successfully refreshed',
     type: AuthTokensDto,
   })
-  @ApiResponse({
+  @SwaggerApiResponse({
     status: HttpStatus.UNAUTHORIZED,
     description: 'Invalid refresh token',
   })
@@ -196,16 +267,16 @@ export class AuthController {
     description: 'Send verification email to user',
   })
   @ApiBody({ type: SendVerificationEmailDto })
-  @ApiResponse({
+  @SwaggerApiResponse({
     status: HttpStatus.OK,
     description: 'Verification email sent successfully',
     type: EmailVerificationResponseDto,
   })
-  @ApiResponse({
+  @SwaggerApiResponse({
     status: HttpStatus.NOT_FOUND,
     description: 'User not found',
   })
-  @ApiResponse({
+  @SwaggerApiResponse({
     status: HttpStatus.BAD_REQUEST,
     description: 'Email is already verified or failed to send email',
   })
@@ -222,16 +293,16 @@ export class AuthController {
     description: 'Verify user email address using verification token',
   })
   @ApiBody({ type: VerifyEmailDto })
-  @ApiResponse({
+  @SwaggerApiResponse({
     status: HttpStatus.OK,
     description: 'Email verified successfully',
     type: EmailVerificationResponseDto,
   })
-  @ApiResponse({
+  @SwaggerApiResponse({
     status: HttpStatus.BAD_REQUEST,
     description: 'Invalid or expired verification token',
   })
-  @ApiResponse({
+  @SwaggerApiResponse({
     status: HttpStatus.NOT_FOUND,
     description: 'User not found',
   })
@@ -239,6 +310,34 @@ export class AuthController {
     @Body() verifyEmailDto: VerifyEmailDto,
   ): Promise<EmailVerificationResponseDto> {
     return this.authService.verifyEmail(verifyEmailDto);
+  }
+
+  @Get('invitation/:token')
+  @ApiOperation({
+    summary: 'Get invitation info',
+    description: 'Get workspace and inviter information from invitation token',
+  })
+  @ApiParam({
+    name: 'token',
+    description: 'Invitation token',
+    type: 'string',
+  })
+  @SwaggerApiResponse({
+    status: 200,
+    description: 'Invitation information retrieved successfully',
+    type: InvitationInfoDto,
+  })
+  async getInvitationInfo(
+    @Param('token') token: string,
+  ): Promise<ApiResponse<InvitationInfoDto>> {
+    const invitationInfo = await this.authService.getInvitationInfo(token);
+
+    return {
+      success: true,
+      statusCode: 200,
+      message: 'Invitation information retrieved successfully',
+      data: invitationInfo,
+    };
   }
 
   @UseGuards(JwtAuthGuard)
@@ -250,11 +349,11 @@ export class AuthController {
     description: 'Revoke current refresh token and device session',
   })
   @ApiBody({ type: RefreshTokenDto })
-  @ApiResponse({
+  @SwaggerApiResponse({
     status: HttpStatus.OK,
     description: 'Successfully logged out',
   })
-  @ApiResponse({
+  @SwaggerApiResponse({
     status: HttpStatus.UNAUTHORIZED,
     description: 'Invalid or missing JWT token',
   })
@@ -263,12 +362,12 @@ export class AuthController {
     @Request() req: AuthenticatedRequest,
     @Headers() headers: Record<string, string>,
   ): Promise<{ message: string }> {
-    const userId = (req.user as UserDto).id;
+    const userId = (req.user as UserPayload).id;
     const deviceSessionData = this.extractDeviceSessionData(req, headers);
 
     try {
       // Extract token ID from refresh token and revoke it
-      const decoded = this.authService['jwtService'].verify<JwtPayload>(
+      const decoded = this.authService['jwtService'].verify<UserPayload>(
         refreshTokenDto.refreshToken,
         {
           secret: this.authService['configService'].get<string>(
@@ -305,18 +404,18 @@ export class AuthController {
     description:
       'Revoke all refresh tokens and device sessions for the current user',
   })
-  @ApiResponse({
+  @SwaggerApiResponse({
     status: HttpStatus.OK,
     description: 'Successfully logged out from all devices',
   })
-  @ApiResponse({
+  @SwaggerApiResponse({
     status: HttpStatus.UNAUTHORIZED,
     description: 'Invalid or missing JWT token',
   })
   async logoutAll(
     @Request() req: AuthenticatedRequest,
   ): Promise<{ message: string }> {
-    const userId = (req.user as UserDto).id;
+    const userId = (req.user as UserPayload).id;
 
     // Revoke all refresh tokens
     await this.authService.revokeAllUserTokens(userId);
