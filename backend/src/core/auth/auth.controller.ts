@@ -362,7 +362,7 @@ export class AuthController {
     @Request() req: AuthenticatedRequest,
     @Headers() headers: Record<string, string>,
   ): Promise<{ message: string }> {
-    const userId = (req.user as UserPayload).id;
+    const userId = req.user.id;
     const deviceSessionData = this.extractDeviceSessionData(req, headers);
 
     try {
@@ -415,7 +415,7 @@ export class AuthController {
   async logoutAll(
     @Request() req: AuthenticatedRequest,
   ): Promise<{ message: string }> {
-    const userId = (req.user as UserPayload).id;
+    const userId = req.user.id;
 
     // Revoke all refresh tokens
     await this.authService.revokeAllUserTokens(userId);

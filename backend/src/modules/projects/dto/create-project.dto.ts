@@ -5,8 +5,11 @@ import {
   IsOptional,
   Length,
   IsDateString,
-  IsObject,
+  IsArray,
+  ValidateNested,
 } from 'class-validator';
+import { Type } from 'class-transformer';
+import { CustomFieldValueDto } from './custom-field.dto';
 
 export class CreateProjectDto {
   @ApiProperty({
@@ -51,14 +54,22 @@ export class CreateProjectDto {
   targetDate?: string;
 
   @ApiPropertyOptional({
-    description: 'Custom fields for project metadata',
-    example: {
-      priority: 'high',
-      department: 'engineering',
-      budget: 50000,
-    },
+    description: 'Custom field values for this project',
+    type: [CustomFieldValueDto],
+    example: [
+      {
+        fieldId: 'priority-field-uuid',
+        value: 'high',
+      },
+      {
+        fieldId: 'budget-field-uuid',
+        value: 50000,
+      },
+    ],
   })
   @IsOptional()
-  @IsObject()
-  customFields?: Record<string, any>;
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CustomFieldValueDto)
+  customFields?: CustomFieldValueDto[];
 }

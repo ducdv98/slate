@@ -9,11 +9,15 @@ import { PrismaService } from '../../core/database/prisma.service';
 import { PermissionService } from '../workspace/services/permission.service';
 import { AuditLogService } from '../../shared/services/audit-log.service';
 import { AuditAction, AuditTargetType } from '../../shared/types/audit.types';
+import { CustomFieldValidationService } from '../../shared/services/custom-field-validation.service';
 import {
   CreateProjectDto,
   UpdateProjectDto,
   ProjectDto,
   ProjectListDto,
+  CustomFieldDefinitionDto,
+  CustomFieldValueDto,
+  ProjectCustomFieldsDto,
 } from './dto';
 
 @Injectable()
@@ -22,6 +26,7 @@ export class ProjectsService {
     private readonly prisma: PrismaService,
     private readonly permissionService: PermissionService,
     private readonly auditLogService: AuditLogService,
+    private readonly customFieldValidationService: CustomFieldValidationService,
   ) {}
 
   async create(
@@ -68,7 +73,9 @@ export class ProjectsService {
         targetDate: createProjectDto.targetDate
           ? new Date(createProjectDto.targetDate)
           : null,
-        customFields: createProjectDto.customFields || null,
+        customFields: createProjectDto.customFields
+          ? JSON.parse(JSON.stringify(createProjectDto.customFields))
+          : null,
         progress: 0, // Initialize progress to 0
       },
     });
@@ -437,5 +444,141 @@ export class ProjectsService {
       completedIssueCount,
       milestoneCount,
     };
+  }
+
+  // Custom Field Management Methods
+
+  async getCustomFieldDefinitions(
+    workspaceId: string,
+    userId: string,
+  ): Promise<CustomFieldDefinitionDto[]> {
+    await this.verifyWorkspaceAccess(workspaceId, userId);
+
+    // For now, return empty array - we'll store definitions in database later
+    // This is a placeholder for the basic implementation
+    return [];
+  }
+
+  async createCustomFieldDefinition(
+    workspaceId: string,
+    definition: CustomFieldDefinitionDto,
+    userId: string,
+  ): Promise<CustomFieldDefinitionDto> {
+    await this.verifyWorkspaceAccess(workspaceId, userId);
+
+    // Validate the field definition
+    this.customFieldValidationService.validateFieldDefinition(
+      definition as any,
+    );
+
+    // For now, just return the definition - we'll store in database later
+    // This is a placeholder for the basic implementation
+    return definition;
+  }
+
+  async updateCustomFieldDefinition(
+    workspaceId: string,
+    fieldId: string,
+    definition: Partial<CustomFieldDefinitionDto>,
+    userId: string,
+  ): Promise<CustomFieldDefinitionDto> {
+    await this.verifyWorkspaceAccess(workspaceId, userId);
+
+    // For now, just return the updated definition - we'll store in database later
+    if (!definition.id) {
+      definition.id = fieldId;
+    }
+
+    return definition as CustomFieldDefinitionDto;
+  }
+
+  async deleteCustomFieldDefinition(
+    workspaceId: string,
+    fieldId: string,
+    userId: string,
+  ): Promise<void> {
+    await this.verifyWorkspaceAccess(workspaceId, userId);
+
+    // For now, this is a placeholder - we'll remove from database later
+    // In a real implementation, we would:
+    // 1. Find the field definition
+    // 2. Remove all values for this field from all projects
+    // 3. Delete the field definition
+  }
+
+  async getProjectCustomFields(
+    workspaceId: string,
+    projectId: string,
+    userId: string,
+  ): Promise<ProjectCustomFieldsDto> {
+    const project = await this.findOne(workspaceId, projectId, userId);
+
+    return {
+      definitions: await this.getCustomFieldDefinitions(workspaceId, userId),
+      values: project.customFields || [],
+    };
+  }
+
+  async updateProjectCustomFields(
+    workspaceId: string,
+    projectId: string,
+    customFields: CustomFieldValueDto[],
+    userId: string,
+  ): Promise<CustomFieldValueDto[]> {
+    await this.verifyWorkspaceAccess(workspaceId, userId);
+
+    // Verify project exists
+    const existingProject = await this.prisma.project.findFirst({
+      where: {
+        id: projectId,
+        workspaceId,
+      },
+    });
+
+    if (!existingProject) {
+      throw new NotFoundException('Project not found');
+    }
+
+    // Get field definitions for validation
+    const definitions = await this.getCustomFieldDefinitions(
+      workspaceId,
+      userId,
+    );
+
+    // Validate each custom field value
+    for (const fieldValue of customFields) {
+      const definition = definitions.find((d) => d.id === fieldValue.fieldId);
+      if (definition) {
+        this.customFieldValidationService.validateFieldValue(
+          definition as any,
+          fieldValue.value,
+        );
+      }
+    }
+
+    // Update project with new custom field values
+    await this.prisma.project.update({
+      where: { id: projectId },
+      data: {
+        customFields: JSON.parse(JSON.stringify(customFields)),
+      },
+    });
+
+    // Log audit event
+    await this.auditLogService.logAction(
+      AuditAction.PROJECT_UPDATE,
+      AuditTargetType.PROJECT,
+      projectId,
+      workspaceId,
+      userId,
+      {
+        customFields: {
+          before: existingProject.customFields,
+          after: customFields,
+        },
+      },
+    );
+
+    return customFields;
   }
 }

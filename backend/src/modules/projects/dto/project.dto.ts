@@ -1,4 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { CustomFieldValueDto } from './custom-field.dto';
 
 export class ProjectDto {
   @ApiProperty({
@@ -50,14 +51,20 @@ export class ProjectDto {
   progress?: number;
 
   @ApiPropertyOptional({
-    description: 'Custom fields for project metadata',
-    example: {
-      priority: 'high',
-      department: 'engineering',
-      budget: 50000,
-    },
+    description: 'Custom field values for this project',
+    type: [CustomFieldValueDto],
+    example: [
+      {
+        fieldId: 'priority-field-uuid',
+        value: 'high',
+      },
+      {
+        fieldId: 'budget-field-uuid',
+        value: 50000,
+      },
+    ],
   })
-  customFields?: Record<string, any>;
+  customFields?: CustomFieldValueDto[];
 
   @ApiProperty({
     description: 'Project creation timestamp',

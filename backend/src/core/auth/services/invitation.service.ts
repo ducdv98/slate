@@ -158,7 +158,7 @@ export class InvitationService {
     try {
       const payload = this.jwt.verify(token, {
         secret: this.config.get('JWT_SECRET'),
-      }) as InvitationPayload;
+      });
 
       // Get workspace info
       const workspace = await this.prisma.workspace.findUnique({

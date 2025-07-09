@@ -29,6 +29,10 @@ import {
   CanCreateProjects,
   CanUpdateProjects,
   CanDeleteProjects,
+  CanViewCustomFields,
+  CanCreateCustomFields,
+  CanUpdateCustomFields,
+  CanDeleteCustomFields,
 } from '../../common/decorators/workspace-permissions.decorator';
 import { ProjectsService } from './projects.service';
 import {
@@ -36,6 +40,9 @@ import {
   UpdateProjectDto,
   ProjectDto,
   ProjectListDto,
+  CustomFieldDefinitionDto,
+  CustomFieldValueDto,
+  ProjectCustomFieldsDto,
 } from './dto';
 import { UuidValidationPipe } from '../../common/pipes/uuid-validation.pipe';
 import { ApiResponse } from '../../shared/types/response.types';
@@ -349,5 +356,311 @@ export class ProjectsController {
     await this.projectsService.updateProgress(id);
 
     return ResponseUtil.success(null, 'Project progress updated successfully');
+  }
+
+  // Custom Field Management Endpoints
+
+  @Get('custom-fields/definitions')
+  @CanViewCustomFields()
+  @ApiOperation({
+    summary: 'Get custom field definitions',
+    description: 'Retrieve all custom field definitions for the workspace',
+  })
+  @ApiParam({
+    name: 'workspaceId',
+    description: 'Workspace ID',
+    type: String,
+  })
+  @ApiResponseDecorator({
+    status: HttpStatus.OK,
+    description: 'Custom field definitions retrieved successfully',
+    type: [CustomFieldDefinitionDto],
+  })
+  @ApiResponseDecorator({
+    status: HttpStatus.FORBIDDEN,
+    description: 'You do not have permission to view custom fields',
+  })
+  @ApiResponseDecorator({
+    status: HttpStatus.UNAUTHORIZED,
+    description: 'Invalid or missing JWT token',
+  })
+  async getCustomFieldDefinitions(
+    @Param('workspaceId', UuidValidationPipe) workspaceId: string,
+    @Request() req: AuthenticatedRequest,
+  ): Promise<ApiResponse<CustomFieldDefinitionDto[]>> {
+    const definitions = await this.projectsService.getCustomFieldDefinitions(
+      workspaceId,
+      req.user.id,
+    );
+    return ResponseUtil.success(
+      definitions,
+      'Custom field definitions retrieved successfully',
+    );
+  }
+
+  @Post('custom-fields/definitions')
+  @CanCreateCustomFields()
+  @ApiOperation({
+    summary: 'Create custom field definition',
+    description: 'Create a new custom field definition for the workspace',
+  })
+  @ApiParam({
+    name: 'workspaceId',
+    description: 'Workspace ID',
+    type: String,
+  })
+  @ApiBody({
+    type: CustomFieldDefinitionDto,
+    description: 'Custom field definition data',
+  })
+  @ApiResponseDecorator({
+    status: HttpStatus.CREATED,
+    description: 'Custom field definition created successfully',
+    type: CustomFieldDefinitionDto,
+  })
+  @ApiResponseDecorator({
+    status: HttpStatus.BAD_REQUEST,
+    description: 'Invalid custom field definition data',
+  })
+  @ApiResponseDecorator({
+    status: HttpStatus.CONFLICT,
+    description: 'Custom field with this name already exists',
+  })
+  @ApiResponseDecorator({
+    status: HttpStatus.FORBIDDEN,
+    description: 'You do not have permission to create custom fields',
+  })
+  @ApiResponseDecorator({
+    status: HttpStatus.UNAUTHORIZED,
+    description: 'Invalid or missing JWT token',
+  })
+  async createCustomFieldDefinition(
+    @Param('workspaceId', UuidValidationPipe) workspaceId: string,
+    @Body() definition: CustomFieldDefinitionDto,
+    @Request() req: AuthenticatedRequest,
+  ): Promise<ApiResponse<CustomFieldDefinitionDto>> {
+    const createdDefinition =
+      await this.projectsService.createCustomFieldDefinition(
+        workspaceId,
+        definition,
+        req.user.id,
+      );
+    return ResponseUtil.created(
+      createdDefinition,
+      'Custom field definition created successfully',
+    );
+  }
+
+  @Patch('custom-fields/definitions/:fieldId')
+  @CanUpdateCustomFields()
+  @ApiOperation({
+    summary: 'Update custom field definition',
+    description: 'Update an existing custom field definition',
+  })
+  @ApiParam({
+    name: 'workspaceId',
+    description: 'Workspace ID',
+    type: String,
+  })
+  @ApiParam({
+    name: 'fieldId',
+    description: 'Custom field ID',
+    type: String,
+  })
+  @ApiBody({
+    type: CustomFieldDefinitionDto,
+    description: 'Updated custom field definition data',
+  })
+  @ApiResponseDecorator({
+    status: HttpStatus.OK,
+    description: 'Custom field definition updated successfully',
+    type: CustomFieldDefinitionDto,
+  })
+  @ApiResponseDecorator({
+    status: HttpStatus.NOT_FOUND,
+    description: 'Custom field definition not found',
+  })
+  @ApiResponseDecorator({
+    status: HttpStatus.BAD_REQUEST,
+    description: 'Invalid custom field definition data',
+  })
+  @ApiResponseDecorator({
+    status: HttpStatus.FORBIDDEN,
+    description: 'You do not have permission to update custom fields',
+  })
+  @ApiResponseDecorator({
+    status: HttpStatus.UNAUTHORIZED,
+    description: 'Invalid or missing JWT token',
+  })
+  async updateCustomFieldDefinition(
+    @Param('workspaceId', UuidValidationPipe) workspaceId: string,
+    @Param('fieldId', UuidValidationPipe) fieldId: string,
+    @Body() definition: Partial<CustomFieldDefinitionDto>,
+    @Request() req: AuthenticatedRequest,
+  ): Promise<ApiResponse<CustomFieldDefinitionDto>> {
+    const updatedDefinition =
+      await this.projectsService.updateCustomFieldDefinition(
+        workspaceId,
+        fieldId,
+        definition,
+        req.user.id,
+      );
+    return ResponseUtil.updated(
+      updatedDefinition,
+      'Custom field definition updated successfully',
+    );
+  }
+
+  @Delete('custom-fields/definitions/:fieldId')
+  @CanDeleteCustomFields()
+  @ApiOperation({
+    summary: 'Delete custom field definition',
+    description: 'Delete a custom field definition and all its values',
+  })
+  @ApiParam({
+    name: 'workspaceId',
+    description: 'Workspace ID',
+    type: String,
+  })
+  @ApiParam({
+    name: 'fieldId',
+    description: 'Custom field ID',
+    type: String,
+  })
+  @ApiResponseDecorator({
+    status: HttpStatus.OK,
+    description: 'Custom field definition deleted successfully',
+  })
+  @ApiResponseDecorator({
+    status: HttpStatus.NOT_FOUND,
+    description: 'Custom field definition not found',
+  })
+  @ApiResponseDecorator({
+    status: HttpStatus.FORBIDDEN,
+    description: 'You do not have permission to delete custom fields',
+  })
+  @ApiResponseDecorator({
+    status: HttpStatus.UNAUTHORIZED,
+    description: 'Invalid or missing JWT token',
+  })
+  async deleteCustomFieldDefinition(
+    @Param('workspaceId', UuidValidationPipe) workspaceId: string,
+    @Param('fieldId', UuidValidationPipe) fieldId: string,
+    @Request() req: AuthenticatedRequest,
+  ): Promise<ApiResponse<null>> {
+    await this.projectsService.deleteCustomFieldDefinition(
+      workspaceId,
+      fieldId,
+      req.user.id,
+    );
+    return ResponseUtil.deleted('Custom field definition deleted successfully');
+  }
+
+  @Get(':id/custom-fields')
+  @CanViewCustomFields()
+  @ApiOperation({
+    summary: 'Get project custom fields',
+    description: 'Retrieve custom field values for a specific project',
+  })
+  @ApiParam({
+    name: 'workspaceId',
+    description: 'Workspace ID',
+    type: String,
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'Project ID',
+    type: String,
+  })
+  @ApiResponseDecorator({
+    status: HttpStatus.OK,
+    description: 'Project custom fields retrieved successfully',
+    type: ProjectCustomFieldsDto,
+  })
+  @ApiResponseDecorator({
+    status: HttpStatus.NOT_FOUND,
+    description: 'Project not found',
+  })
+  @ApiResponseDecorator({
+    status: HttpStatus.FORBIDDEN,
+    description: 'You do not have permission to view this project',
+  })
+  @ApiResponseDecorator({
+    status: HttpStatus.UNAUTHORIZED,
+    description: 'Invalid or missing JWT token',
+  })
+  async getProjectCustomFields(
+    @Param('workspaceId', UuidValidationPipe) workspaceId: string,
+    @Param('id', UuidValidationPipe) id: string,
+    @Request() req: AuthenticatedRequest,
+  ): Promise<ApiResponse<ProjectCustomFieldsDto>> {
+    const customFields = await this.projectsService.getProjectCustomFields(
+      workspaceId,
+      id,
+      req.user.id,
+    );
+    return ResponseUtil.success(
+      customFields,
+      'Project custom fields retrieved successfully',
+    );
+  }
+
+  @Patch(':id/custom-fields')
+  @CanUpdateCustomFields()
+  @ApiOperation({
+    summary: 'Update project custom fields',
+    description: 'Update custom field values for a specific project',
+  })
+  @ApiParam({
+    name: 'workspaceId',
+    description: 'Workspace ID',
+    type: String,
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'Project ID',
+    type: String,
+  })
+  @ApiBody({
+    type: [CustomFieldValueDto],
+    description: 'Custom field values to update',
+  })
+  @ApiResponseDecorator({
+    status: HttpStatus.OK,
+    description: 'Project custom fields updated successfully',
+    type: [CustomFieldValueDto],
+  })
+  @ApiResponseDecorator({
+    status: HttpStatus.NOT_FOUND,
+    description: 'Project not found',
+  })
+  @ApiResponseDecorator({
+    status: HttpStatus.BAD_REQUEST,
+    description: 'Invalid custom field values',
+  })
+  @ApiResponseDecorator({
+    status: HttpStatus.FORBIDDEN,
+    description: 'You do not have permission to update this project',
+  })
+  @ApiResponseDecorator({
+    status: HttpStatus.UNAUTHORIZED,
+    description: 'Invalid or missing JWT token',
+  })
+  async updateProjectCustomFields(
+    @Param('workspaceId', UuidValidationPipe) workspaceId: string,
+    @Param('id', UuidValidationPipe) id: string,
+    @Body() customFields: CustomFieldValueDto[],
+    @Request() req: AuthenticatedRequest,
+  ): Promise<ApiResponse<CustomFieldValueDto[]>> {
+    const updatedFields = await this.projectsService.updateProjectCustomFields(
+      workspaceId,
+      id,
+      customFields,
+      req.user.id,
+    );
+    return ResponseUtil.updated(
+      updatedFields,
+      'Project custom fields updated successfully',
+    );
   }
 }

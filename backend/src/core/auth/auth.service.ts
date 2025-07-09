@@ -638,9 +638,7 @@ export class AuthService {
     // Decode the token to get the invited email for validation
     let invitedEmail: string;
     try {
-      const decodedToken = this.jwtService.decode(
-        signupData.invitationToken,
-      ) as { email?: string } | null;
+      const decodedToken = this.jwtService.decode(signupData.invitationToken);
       invitedEmail = decodedToken?.email || '';
     } catch {
       throw new BadRequestException('Invalid invitation token format');

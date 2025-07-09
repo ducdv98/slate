@@ -97,3 +97,37 @@ export const CanViewAnalytics = () =>
 
 export const CanExportData = () =>
   RequireWorkspacePermissions(WorkspacePermission.EXPORT_DATA);
+
+// Custom Field Permission Decorators
+export const CanViewCustomFields = () =>
+  SetMetadata('requiredPermissions', [WorkspacePermission.VIEW_CUSTOM_FIELDS]);
+
+export const CanManageCustomFields = () =>
+  SetMetadata('requiredPermissions', [
+    WorkspacePermission.MANAGE_CUSTOM_FIELDS,
+  ]);
+
+export const CanCreateCustomFields = () =>
+  SetMetadata('requiredPermissions', [
+    WorkspacePermission.CREATE_CUSTOM_FIELDS,
+  ]);
+
+export const CanUpdateCustomFields = () =>
+  SetMetadata('requiredPermissions', [
+    WorkspacePermission.UPDATE_CUSTOM_FIELDS,
+  ]);
+
+export const CanDeleteCustomFields = () =>
+  SetMetadata('requiredPermissions', [
+    WorkspacePermission.DELETE_CUSTOM_FIELDS,
+  ]);
+
+export const CanViewSensitiveFields = () =>
+  SetMetadata('requiredPermissions', [
+    WorkspacePermission.VIEW_SENSITIVE_FIELDS,
+  ]);
+
+export const CanUpdateSensitiveFields = () =>
+  SetMetadata('requiredPermissions', [
+    WorkspacePermission.UPDATE_SENSITIVE_FIELDS,
+  ]);

@@ -65,8 +65,8 @@
 1. **Project Management**
 
    - [x] Project CRUD operations
-   - [ ] Project progress calculation
-   - [ ] Basic custom fields support
+   - [x] Project progress calculation
+   - [x] Basic custom fields support
 
 2. **Issue Tracking**
    - [ ] Issue CRUD operations
