@@ -22,39 +22,6 @@ export class UsersService {
     private readonly auditLogService: AuditLogService,
   ) {}
 
-  async findAll(
-    page = 1,
-    limit = 10,
-    search?: string,
-  ): Promise<{ users: UserProfileDto[]; total: number; totalPages: number }> {
-    const skip = (page - 1) * limit;
-
-    const where = search
-      ? {
-          OR: [
-            { name: { contains: search, mode: 'insensitive' as const } },
-            { email: { contains: search, mode: 'insensitive' as const } },
-          ],
-        }
-      : {};
-
-    const [users, total] = await Promise.all([
-      this.prisma.user.findMany({
-        where,
-        skip,
-        take: limit,
-        orderBy: { createdAt: 'desc' },
-      }),
-      this.prisma.user.count({ where }),
-    ]);
-
-    return {
-      users: users.map((user) => this.mapUserToProfileDto(user)),
-      total,
-      totalPages: Math.ceil(total / limit),
-    };
-  }
-
   async findOne(id: string): Promise<UserProfileDto> {
     const user = await this.prisma.user.findUnique({
       where: { id },

@@ -30,6 +30,7 @@
    - [x] User CRUD operations (self-registration via signup, profile management)
    - [x] Profile management endpoints (avatar, timezone, preferences)
    - [x] Device session tracking
+   - [x] **Security fix**: Removed insecure endpoints that allowed any user to access all users or any user by ID
 
 2. **Workspace System**
    - [x] Workspace CRUD operations
