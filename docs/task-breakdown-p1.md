@@ -29,10 +29,10 @@
 
    - [x] User CRUD operations (self-registration via signup, profile management)
    - [x] Profile management endpoints (avatar, timezone, preferences)
-   - [ ] Device session tracking
+   - [x] Device session tracking
 
 2. **Workspace System**
-   - [ ] Workspace CRUD operations
+   - [x] Workspace CRUD operations
    - [ ] Membership management (invite/join/remove)
    - [ ] Role-based access control (admin/member)
    - [ ] Workspace activity logging
