@@ -69,7 +69,7 @@
    - [x] Basic custom fields support
 
 2. **Issue Tracking**
-   - [ ] Issue CRUD operations
+   - [x] Issue CRUD operations
    - [ ] Status transitions (Todo → In Progress → Done)
    - [ ] Priority management
    - [ ] Assignee assignment
